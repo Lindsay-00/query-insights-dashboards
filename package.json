@@ -1,6 +1,6 @@
 {
   "name": "opensearch_query_insights_dashboards",
-  "version": "3.0.0.0",
+  "version": "3.0.0.0-beta1",
   "description": "OpenSearch Dashboards plugin for Query Insights",
   "main": "index.js",
   "opensearchDashboards": {
@@ -31,7 +31,10 @@
     "echarts": "^5.6.0",
     "echarts-for-react": "^3.0.2",
     "object-hash": "^3.0.0",
-    "plotly.js-dist": "^2.34.0"
+    "plotly.js-dist": "^2.34.0",
+    "@babel/helpers": "^7.22.9",
+    "@babel/runtime": "^7.22.9",
+    "@babel/runtime-corejs3": "^7.22.9"
   },
   "resolutions": {
     "@types/react": "^16.9.8",
@@ -42,19 +45,27 @@
     "json5": "^2.2.3",
     "@babel/core": "^7.20.12",
     "@babel/traverse": "^7.20.12",
-    "@cypress/request": "^3.0.0"
+    "@cypress/request": "^3.0.0",
+    "braces": "3.0.3",
+    "micromatch": "4.0.8",
+    "cross-spawn": "7.0.5",
+    "serialize-javascript": "6.0.2",
+    "glob-parent": "5.1.2",
+    "@babel/helpers": "^7.22.9",
+    "@babel/runtime": "^7.22.9",
+    "@babel/runtime-corejs3": "^7.22.9"
   },
   "devDependencies": {
-    "@cypress/webpack-preprocessor": "^5.17.1",
+    "@cypress/webpack-preprocessor": "^6.0.1",
     "@elastic/elastic-eslint-config-kibana": "link:../../packages/opensearch-eslint-config-opensearch-dashboards",
     "@elastic/eslint-import-resolver-kibana": "link:../../packages/osd-eslint-import-resolver-opensearch-dashboards",
     "@testing-library/dom": "^8.11.3",
-    "@testing-library/jest-dom": "^5.16.2",
+    "@testing-library/jest-dom": "^5.17.0",
     "@testing-library/user-event": "^14.4.3",
     "@types/object-hash": "^3.0.0",
     "@types/react-dom": "^16.9.8",
     "@types/react-router-dom": "^5.3.2",
-    "cypress": "12.17.4",
+    "cypress": "^13.6.0",
     "cypress-real-events": "1.7.6",
     "cypress-recurse": "^1.27.0",
     "eslint-plugin-cypress": "^2.8.1",
