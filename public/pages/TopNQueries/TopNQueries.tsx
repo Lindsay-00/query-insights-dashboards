@@ -171,6 +171,7 @@ const TopNQueries = ({
           from: parseDateString(start),
           to: parseDateString(end),
           dataSourceId: getDataSourceFromUrl().id, // TODO: get this dynamically from the URL
+          verbose: false,
         },
       };
       const fetchMetric = async (endpoint: string) => {
@@ -313,18 +314,26 @@ const TopNQueries = ({
             deleteAfterDays: newDeleteAfterDays,
             exporterType: newExporterType,
           });
-          await core.http.put('/api/update_settings', {
-            query: {
-              metric,
-              enabled,
-              top_n_size: newTopN,
-              window_size: `${newWindowSize}${newTimeUnit === 'MINUTES' ? 'm' : 'h'}`,
-              exporterType: newExporterType,
-              group_by: newGroupBy,
-              delete_after_days: newDeleteAfterDays,
-              dataSourceId: getDataSourceFromUrl().id, // TODO: get this dynamically from the URL
-            },
-          });
+          const queryParams: Record<string, any> = {
+            metric,
+            enabled,
+            top_n_size: newTopN,
+            exporterType: newExporterType,
+            group_by: newGroupBy,
+            delete_after_days: newDeleteAfterDays,
+            dataSourceId: getDataSourceFromUrl().id,
+          };
+          if (newTimeUnit === 'MINUTES') {
+            newTimeUnit = 'm';
+          }
+          if (newTimeUnit === 'HOURS') {
+            newTimeUnit = 'h';
+          }
+          if (newWindowSize && newTimeUnit) {
+            queryParams.window_size = `${newWindowSize}${newTimeUnit}`;
+          }
+
+          await core.http.put('/api/update_settings', { query: queryParams });
         } catch (error) {
           console.error('Failed to set settings:', error);
         }
@@ -342,7 +351,6 @@ const TopNQueries = ({
     setEnd(end);
     setRecentlyUsedRanges(usedRange.length > 10 ? usedRange.slice(0, 9) : usedRange);
     retrieveConfigInfo(true);
-    retrieveQueries(start, end);
   };
 
   useEffect(() => {

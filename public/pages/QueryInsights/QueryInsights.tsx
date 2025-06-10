@@ -117,8 +117,8 @@ const QueryInsights = ({
               onClick={() => {
                 const route =
                   query.group_by === 'SIMILARITY'
-                    ? `/query-group-details?from=${from}&to=${to}&id=${query.id}`
-                    : `/query-details?from=${from}&to=${to}&id=${query.id}`;
+                    ? `/query-group-details?from=${from}&to=${to}&id=${query.id}&verbose=${true}`
+                    : `/query-details?from=${from}&to=${to}&id=${query.id}&verbose=${true}`;
                 history.push(route);
               }}
             >
@@ -139,8 +139,8 @@ const QueryInsights = ({
               onClick={() => {
                 const route =
                   query.group_by === 'SIMILARITY'
-                    ? `/query-group-details?from=${from}&to=${to}&id=${query.id}`
-                    : `/query-details?from=${from}&to=${to}&id=${query.id}`;
+                    ? `/query-group-details?from=${from}&to=${to}&id=${query.id}&verbose=${true}`
+                    : `/query-details?from=${from}&to=${to}&id=${query.id}&verbose=${true}`;
                 history.push(route);
               }}
             >
@@ -153,95 +153,96 @@ const QueryInsights = ({
       truncateText: true,
     },
   ];
-  const querycountColumn: Array<EuiBasicTableColumn<any>> = [
+  const querycountColumn: Array<EuiBasicTableColumn<SearchQueryRecord>> = [
     {
-      field: MEASUREMENTS_FIELD,
       name: QUERY_COUNT,
-      render: (measurements: SearchQueryRecord['measurements']) =>
-        `${
-          measurements?.latency?.count ||
-          measurements?.cpu?.count ||
-          measurements?.memory?.count ||
+      render: (query: SearchQueryRecord) => {
+        const count =
+          query.measurements?.latency?.count ||
+          query.measurements?.cpu?.count ||
+          query.measurements?.memory?.count ||
+          1;
+        return `${count}`;
+      },
+      sortable: (query: SearchQueryRecord) => {
+        return (
+          query.measurements?.latency?.count ||
+          query.measurements?.cpu?.count ||
+          query.measurements?.memory?.count ||
           1
-        }`,
-      sortable: (measurements: SearchQueryRecord['measurements']) => {
-        return Number(
-          measurements?.latency?.count ||
-            measurements?.cpu?.count ||
-            measurements?.memory?.count ||
-            1
         );
       },
       truncateText: true,
     },
   ];
+
   // @ts-ignore
-  const metricColumns: Array<EuiBasicTableColumn<any>> = [
+  const metricColumns: Array<EuiBasicTableColumn<SearchQueryRecord>> = [
     {
-      field: MEASUREMENTS_FIELD,
       name:
         selectedFilter.includes('SIMILARITY') && selectedFilter.includes('NONE')
           ? `Avg ${LATENCY} / ${LATENCY}`
           : selectedFilter.includes('SIMILARITY')
           ? `Average ${LATENCY}`
           : `${LATENCY}`,
-      render: (measurements: SearchQueryRecord['measurements']) => {
-        return calculateMetric(
-          measurements?.latency?.number,
-          measurements?.latency?.count,
+      render: (query: SearchQueryRecord) =>
+        calculateMetric(
+          query.measurements?.latency?.number,
+          query.measurements?.latency?.count,
           'ms',
           1,
           METRIC_DEFAULT_MSG
-        );
-      },
-      sortable: true,
+        ),
+      sortable: (query) =>
+        calculateMetricNumber(
+          query.measurements?.latency?.number,
+          query.measurements?.latency?.count
+        ),
       truncateText: true,
     },
     {
-      field: MEASUREMENTS_FIELD,
       name:
         selectedFilter.includes('SIMILARITY') && selectedFilter.includes('NONE')
           ? `Avg ${CPU_TIME} / ${CPU_TIME}`
           : selectedFilter.includes('SIMILARITY')
           ? `Average ${CPU_TIME}`
           : `${CPU_TIME}`,
-      render: (measurements: SearchQueryRecord['measurements']) => {
-        return calculateMetric(
-          measurements?.cpu?.number,
-          measurements?.cpu?.count,
-          'ms',
-          1000000, // Divide by 1,000,000 for CPU time
-          METRIC_DEFAULT_MSG
-        );
-      },
-      sortable: (query: SearchQueryRecord) => {
-        return calculateMetricNumber(
+      render: (query: SearchQueryRecord) =>
+        calculateMetric(
           query.measurements?.cpu?.number,
-          query.measurements?.cpu?.count
-        );
-      },
+          query.measurements?.cpu?.count,
+          'ms',
+          1000000,
+          METRIC_DEFAULT_MSG
+        ),
+      sortable: (query) =>
+        calculateMetricNumber(query.measurements?.cpu?.number, query.measurements?.cpu?.count),
       truncateText: true,
     },
     {
-      field: MEASUREMENTS_FIELD,
       name:
         selectedFilter.includes('SIMILARITY') && selectedFilter.includes('NONE')
           ? `Avg ${MEMORY_USAGE} / ${MEMORY_USAGE}`
           : selectedFilter.includes('SIMILARITY')
           ? `Average ${MEMORY_USAGE}`
           : MEMORY_USAGE,
-      render: (measurements: SearchQueryRecord['measurements']) => {
-        return calculateMetric(
-          measurements?.memory?.number,
-          measurements?.memory?.count,
+      render: (query: SearchQueryRecord) =>
+        calculateMetric(
+          query.measurements?.memory?.number,
+          query.measurements?.memory?.count,
           'B',
           1,
           METRIC_DEFAULT_MSG
-        );
-      },
+        ),
+      sortable: (query) =>
+        calculateMetricNumber(
+          query.measurements?.memory?.number,
+          query.measurements?.memory?.count
+        ),
       truncateText: true,
     },
   ];
+
   const timestampColumn: Array<EuiBasicTableColumn<any>> = [
     {
       // Make into flyout instead?
@@ -250,7 +251,7 @@ const QueryInsights = ({
         const isQuery = query.group_by === 'NONE';
         const linkContent = isQuery ? convertTime(query.timestamp) : '-';
         const onClickHandler = () => {
-          const route = `/query-details?from=${from}&to=${to}&id=${query.id}`;
+          const route = `/query-details?from=${from}&to=${to}&id=${query.id}&verbose=true`;
           history.push(route);
         };
         return (
@@ -263,7 +264,7 @@ const QueryInsights = ({
       truncateText: true,
     },
   ];
-  const Columnsset5: Array<EuiBasicTableColumn<any>> = [
+  const QueryTypeSpecificColumns: Array<EuiBasicTableColumn<any>> = [
     {
       field: INDICES_FIELD,
       name: INDICES,
@@ -316,11 +317,16 @@ const QueryInsights = ({
     ...querycountColumn,
     ...timestampColumn,
     ...metricColumns,
-    ...Columnsset5,
+    ...QueryTypeSpecificColumns,
   ];
 
   const groupTypeColumns = [...baseColumns, ...querycountColumn, ...metricColumns];
-  const queryTypeColumns = [...baseColumns, ...timestampColumn, ...metricColumns, ...Columnsset5];
+  const queryTypeColumns = [
+    ...baseColumns,
+    ...timestampColumn,
+    ...metricColumns,
+    ...QueryTypeSpecificColumns,
+  ];
 
   const columnsToShow = useMemo(() => {
     const hasQueryType = selectedFilter.includes('NONE');
@@ -373,6 +379,7 @@ const QueryInsights = ({
 
   const onRefresh = async ({ start, end }: { start: string; end: string }) => {
     onTimeChange({ start, end });
+    retrieveQueries(start, end);
   };
 
   const filterDuplicates = (options: any[]) =>

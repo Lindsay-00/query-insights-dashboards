@@ -10,9 +10,9 @@ import { METRICS } from '../support/constants';
 const indexName = 'sample_index';
 
 /**
-  Helper function to clean up the environment:
-  - Deletes the test index.
-  - Disables the top queries features.
+ Helper function to clean up the environment:
+ - Deletes the test index.
+ - Disables the top queries features.
  */
 const clearAll = () => {
   cy.deleteIndexByName(indexName);
@@ -114,6 +114,119 @@ describe('Query Insights Dashboard', () => {
     cy.contains('No items found');
   });
 
+  it('should paginate the query table', () => {
+    for (let i = 0; i < 20; i++) {
+      cy.searchOnIndex(indexName);
+    }
+    cy.wait(10000);
+    cy.reload();
+    cy.get('.euiPagination').should('be.visible');
+    cy.get('.euiPagination__item').contains('2').click();
+    // Verify rows on the second page
+    cy.get('.euiTableRow').should('have.length.greaterThan', 0);
+  });
+
+  it('should get minimal details of the query using verbose=false', () => {
+    const to = new Date().toISOString();
+    const from = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+
+    return cy
+      .request({
+        method: 'GET',
+        url: `/api/top_queries/latency`,
+        qs: {
+          from: from,
+          to: to,
+          verbose: false,
+        },
+      })
+      .then((response) => {
+        expect(response.status).to.eq(200);
+        expect(response.body).to.have.property('ok', true);
+
+        const responseData = response.body.response;
+        expect(responseData).to.have.property('top_queries');
+        expect(responseData.top_queries).to.be.an('array');
+        expect(responseData.top_queries.length).to.be.greaterThan(0);
+
+        const firstQuery = responseData.top_queries[0];
+        const requiredFields = [
+          'group_by',
+          'id',
+          'indices',
+          'labels',
+          'measurements',
+          'node_id',
+          'search_type',
+          'timestamp',
+          'total_shards',
+        ];
+
+        expect(firstQuery).to.include.all.keys(requiredFields);
+        const typeValidations = {
+          group_by: 'string',
+          id: 'string',
+          indices: 'array',
+          labels: 'object',
+          measurements: 'object',
+          node_id: 'string',
+          search_type: 'string',
+          timestamp: 'number',
+          total_shards: 'number',
+        };
+        Object.entries(typeValidations).forEach(([field, type]) => {
+          expect(firstQuery[field]).to.be.a(type, `${field} should be a ${type}`);
+        });
+        expect(firstQuery.measurements).to.have.all.keys(['cpu', 'latency', 'memory']);
+        ['cpu', 'latency', 'memory'].forEach((metric) => {
+          expect(firstQuery.measurements[metric]).to.be.an('object');
+        });
+      });
+
+    after(() => clearAll());
+  });
+});
+
+describe('Query Insights Dashboard - Dynamic Columns change with Intercepted Top Queries', () => {
+  beforeEach(() => {
+    cy.fixture('stub_top_queries.json').then((stubResponse) => {
+      cy.intercept('GET', '**/api/top_queries/*', {
+        statusCode: 200,
+        body: stubResponse,
+      }).as('getTopQueries');
+    });
+
+    cy.navigateToOverview();
+    cy.wait(1000);
+    cy.wait('@getTopQueries');
+  });
+
+  const testMetricSorting = (columnLabel, columnIndex) => {
+    cy.get('.euiTableHeaderCell').contains(columnLabel).click();
+    cy.wait(1000);
+
+    cy.get('.euiTableRow').then(($rows) => {
+      const values = [...$rows].map(($row) => {
+        const rawText = Cypress.$($row).find('td').eq(columnIndex).text().trim();
+        return parseFloat(rawText.replace(/[^\d.]/g, '')); // remove 'ms'/'B'
+      });
+      const sortedAsc = [...values].sort((a, b) => a - b);
+      expect(values).to.deep.equal(sortedAsc);
+    });
+
+    cy.get('.euiTableHeaderCell').contains(columnLabel).click();
+    cy.wait(1000);
+
+    cy.get('.euiTableRow').then(($rows) => {
+      const values = [...$rows].map(($row) => {
+        const rawText = Cypress.$($row).find('td').eq(columnIndex).text().trim();
+        return parseFloat(rawText.replace(/[^\d.]/g, ''));
+      });
+      const sortedDesc = [...values].sort((a, b) => b - a);
+      expect(values).to.deep.equal(sortedDesc);
+    });
+  };
+
   it('should render only individual query-related headers when NONE filter is applied', () => {
     cy.wait(1000);
     cy.get('.euiFilterButton').contains('Type').click();
@@ -133,25 +246,19 @@ describe('Query Insights Dashboard', () => {
       'Total Shards',
     ];
 
-    //cy.get('.euiTableHeaderCell').should('have.length', expectedHeaders.length);
+    cy.get('.euiTableHeaderCell').should('have.length', expectedHeaders.length);
 
     cy.get('.euiTableHeaderCell').should(($headers) => {
       const actualHeaders = $headers.map((index, el) => Cypress.$(el).text().trim()).get();
       expect(actualHeaders).to.deep.equal(expectedHeaders);
     });
+    testMetricSorting('Timestamp', 2);
+    testMetricSorting('Latency', 3);
+    testMetricSorting('CPU Time', 4);
+    testMetricSorting('Memory Usage', 5);
   });
 
   it('should render only group-related headers in the correct order when SIMILARITY filter is applied', () => {
-    cy.enableGrouping();
-    cy.wait(1000);
-    cy.searchOnIndex(indexName);
-    cy.wait(1000);
-    cy.searchOnIndex(indexName);
-    cy.wait(1000);
-    cy.searchOnIndex(indexName);
-    cy.navigateToOverview();
-    cy.wait(1000);
-    cy.wait(1000);
     cy.get('.euiFilterButton').contains('Type').click();
     cy.get('.euiFilterSelectItem').contains('group').click();
     cy.wait(1000);
@@ -169,11 +276,12 @@ describe('Query Insights Dashboard', () => {
       const actualHeaders = $headers.map((index, el) => Cypress.$(el).text().trim()).get();
       expect(actualHeaders).to.deep.equal(expectedHeaders);
     });
+    testMetricSorting('Query Count', 2);
+    testMetricSorting('Average Latency', 3);
+    testMetricSorting('Average CPU Time', 4);
+    testMetricSorting('Average Memory Usage', 5);
   });
   it('should display both query and group data with proper headers when both are selected', () => {
-    clearAll();
-    cy.wait(10000);
-    cy.reload();
     cy.get('.euiFilterButton').contains('Type').click();
     cy.get('.euiFilterSelectItem').contains('query').click();
     cy.get('.euiFilterSelectItem').contains('group').click();
@@ -196,18 +304,10 @@ describe('Query Insights Dashboard', () => {
       const actualHeaders = $headers.map((index, el) => Cypress.$(el).text().trim()).get();
       expect(actualHeaders).to.deep.equal(expectedGroupHeaders);
     });
+    testMetricSorting('Query Count', 2);
+    testMetricSorting('Timestamp', 3);
+    testMetricSorting('Avg Latency / Latency', 4);
+    testMetricSorting('Avg CPU Time / CPU Time', 5);
+    testMetricSorting('Avg Memory Usage / Memory Usage', 6);
   });
-  it('should paginate the query table', () => {
-    for (let i = 0; i < 20; i++) {
-      cy.searchOnIndex(indexName);
-    }
-    cy.wait(10000);
-    cy.reload();
-    cy.get('.euiPagination').should('be.visible');
-    cy.get('.euiPagination__item').contains('2').click();
-    // Verify rows on the second page
-    cy.get('.euiTableRow').should('have.length.greaterThan', 0);
-  });
-
-  after(() => clearAll());
 });
