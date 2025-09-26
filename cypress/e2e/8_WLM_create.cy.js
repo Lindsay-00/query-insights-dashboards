@@ -4,6 +4,30 @@
  */
 
 describe('WLM Create Page', () => {
+  before(() => {
+
+    cy.request({
+      method: 'PUT',
+      url: 'http://localhost:9200/_cluster/settings',
+      headers: {'Content-Type': 'application/json'},
+      body: {
+        persistent: {'wlm.workload_group.mode': 'enabled'},
+      },
+    });
+
+    cy.request({
+      method: 'GET',
+      url: 'http://localhost:9200/_cluster/settings',
+      qs: {include_defaults: true, flat_settings: true},
+    }).then((res) => {
+      const b = res.body || {};
+      const mode =
+        b.persistent?.['wlm.workload_group.mode'] ??
+        b.transient?.['wlm.workload_group.mode'];
+      expect(mode).to.eq('enabled');
+    });
+  });
+
   beforeEach(() => {
     cy.visit('/app/workload-management#/wlm-create');
   });
@@ -49,7 +73,7 @@ describe('WLM Create Page', () => {
 
     cy.get('[data-testid="name-input"]').type(groupName);
     cy.contains('Soft').click();
-    cy.get('[data-testid="indexInput"]').type('test-index');
+    cy.get('[data-testid="indexInput"]').type(`test-index_${Date.now()}`);
     cy.get('[data-testid="cpu-threshold-input"]').type('10');
     cy.get('[data-testid="memory-threshold-input"]').type('20');
 
